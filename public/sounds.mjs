@@ -1,17 +1,11 @@
-export const MAX_WAV_BYTES = 2 * 1024 * 1024;
-
 export async function readWav(file) {
   if (!/\.wav$/i.test(file.name)) throw Error('Choose a .wav file.');
-  if (!file.size || file.size > MAX_WAV_BYTES) throw Error('Choose a WAV file up to 2 MB.');
+  if (!file.size) throw Error('Choose a non-empty WAV file.');
   const bytes = await file.arrayBuffer();
   const header = new Uint8Array(bytes, 0, Math.min(12, bytes.byteLength));
   const text = String.fromCharCode(...header);
   if (!text.startsWith('RIFF') || text.slice(8, 12) !== 'WAVE') throw Error('This file is not a valid WAV recording.');
-  // Encode in chunks so a longer recording cannot overflow the argument stack.
-  let binary = '';
-  const view = new Uint8Array(bytes);
-  for (let i = 0; i < view.length; i += 8192) binary += String.fromCharCode(...view.subarray(i, i + 8192));
-  return {name: file.name, dataUrl: 'data:audio/wav;base64,' + btoa(binary), bytes};
+  return {name: file.name, bytes};
 }
 
 export function createScoreGainTracker() {

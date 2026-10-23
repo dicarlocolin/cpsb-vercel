@@ -20,17 +20,18 @@ test('only a selected team score increase plays; initial, equal, lower and inval
  tracker.reset();assert.equal(tracker.observe(rows(20,103),'19-2'),false);
 });
 
-test('WAV upload checks actual header, extension, size, and round-trips bytes',async()=>{
- const {readWav,MAX_WAV_BYTES}=await soundModule;
+test('WAV upload checks actual header, extension, and accepts recordings larger than the former cap',async()=>{
+ const {readWav}=await soundModule;
  const bytes=new Uint8Array(44);bytes.set(new TextEncoder().encode('RIFF'));bytes.set(new TextEncoder().encode('WAVE'),8);
  const file=(name,data=bytes)=>({name,size:data.length,arrayBuffer:async()=>data.buffer});
  const wav=await readWav(file('Win.WAV'));
- assert.equal(wav.name,'Win.WAV');assert.deepEqual(Buffer.from(wav.dataUrl.split(',')[1],'base64'),Buffer.from(bytes));
+ assert.equal(wav.name,'Win.WAV');assert.deepEqual(new Uint8Array(wav.bytes),bytes);
  await assert.rejects(readWav(file('Win.mp3')),/\.wav/);
  await assert.rejects(readWav(file('Win.wav',new Uint8Array(44))),/valid WAV/);
  await assert.rejects(readWav(file('Win.wav',new Uint8Array(2))),/valid WAV/);
- await assert.rejects(readWav(file('Win.wav',new Uint8Array())),/2 MB/);
- await assert.rejects(readWav({name:'Win.wav',size:MAX_WAV_BYTES+1}),/2 MB/);
+ await assert.rejects(readWav(file('Win.wav',new Uint8Array())),/non-empty/);
+ const large=new Uint8Array(8*1024*1024);large.set(bytes);
+ assert.equal((await readWav(file('large.wav',large))).bytes.byteLength,large.byteLength);
 });
 
 test('sound requires enabling, handles suspension, replaces overlapping audio and stops cleanly',async()=>{

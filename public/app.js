@@ -5,6 +5,7 @@ import {detailsFraction} from './layout.mjs';
 import {createObservations} from './observations.mjs';
 import {applyPreset} from './presets.mjs';
 import {readWav, createScoreGainTracker, createSoundPlayer} from './sounds.mjs';
+import {createSoundStore} from './sound-storage.mjs';
 let observationStorage;try{observationStorage=localStorage}catch{}
 const observations=createObservations(observationStorage);
 const $=id=>document.getElementById(id), fields={Pos:'Pos.',Overall:'Overall',TeamID:'Team ID',TeamName:'Team Name',Score:'Score',TimeSeconds:'Time',Active:'Active',Images:'Images',VulnsFound:'Found',VulnsRemaining:'Remain',Location:'Location',Division:'Division',Tier:'Tier',Warnings:'Warnings'};
@@ -12,9 +13,10 @@ let config=applyPreset(new URL(location.href),observationStorage,history);
 if(!config)try{config=JSON.parse(localStorage.getItem('cypat-config'))}catch{}config||={name:'CyPat Scoreboard',teams:'19-0512\n19-1074\n19-0479',format:'HH:MM:SS',columns:['Pos','Overall','TeamID','TeamName','Score','TimeSeconds','PPM','Warnings'],formulas:'PPM = Score / TimeMinutes'};
 config.refreshSeconds ||= 60;
 config.localTimes ??= false;
+const soundStore=createSoundStore();
 const scoreGains=createScoreGainTracker();
 const soundPlayer=createSoundPlayer(updateSoundButton);
-let savedSound=null,draftSound=null,soundLoading=false,soundRead=0;
+let savedSound=null,draftSound=null,soundLoading=false,soundRead=0,soundSaving=false;
 function updateSoundButton(){
  const button=$('enablesound');
  button.hidden=!config.soundAlert?.teamId;
@@ -24,11 +26,15 @@ function updateSoundButton(){
 $('enablesound').onclick=()=>{soundPlayer.enable().catch(()=>{$('enablesound').textContent='Retry enabling sound'})};
 async function restoreSound(){
  const alert=config.soundAlert;
- if(!alert?.dataUrl?.startsWith('data:audio/wav;base64,'))return;
+ if(!alert)return;
  try{
-  const bytes=await (await fetch(alert.dataUrl)).arrayBuffer();
-  const buffer=await soundPlayer.decode(bytes);
-  if(config.soundAlert===alert)savedSound={name:alert.name,dataUrl:alert.dataUrl,buffer};
+  let sound;
+  if(alert.soundId)sound=await soundStore.get(alert.soundId);
+  // Existing uploads keep working and migrate on the next Confirm.
+  else if(alert.dataUrl?.startsWith('data:audio/wav;base64,'))sound={name:alert.name,bytes:await (await fetch(alert.dataUrl)).arrayBuffer()};
+  if(!sound)throw Error('Saved sound is missing.');
+  const buffer=await soundPlayer.decode(sound.bytes);
+  if(config.soundAlert===alert)savedSound={...sound,id:alert.soundId,buffer};
  }catch{
   if(config.soundAlert===alert){$('enablesound').textContent='Sound unavailable — configure again';$('enablesound').disabled=true}
  }
@@ -325,7 +331,7 @@ $('soundfile').onchange=async()=>{
  const token=++soundRead;soundLoading=true;$('sounderror').textContent='';updateSoundDraft();
  try{
   const wav=await readWav(file),buffer=await soundPlayer.decode(wav.bytes);
-  if(token===soundRead)draftSound={name:wav.name,dataUrl:wav.dataUrl,buffer};
+  if(token===soundRead)draftSound={...wav,buffer};
  }catch(error){if(token===soundRead)$('sounderror').textContent=error.message}
  finally{if(token===soundRead){soundLoading=false;updateSoundDraft();$('soundfile').value=''}}
 };
@@ -346,8 +352,10 @@ $('configure').onclick=()=>{
 };
 $('cancel').onclick=()=>$('settings').close();
 $('settings').addEventListener('close',()=>{soundRead++;soundLoading=false;soundPlayer.stop()});
-$('form').onsubmit=e=>{
- e.preventDefault();
+$('settings').addEventListener('cancel',e=>{if(soundSaving)e.preventDefault()});
+$('form').onsubmit=async e=>{
+ e.preventDefault();if(soundSaving)return;
+ let pendingSoundId,disabledControls;
  try{
   const teamIDs=$('teams').value.split('\n').map(line=>line.split(',')[0].trim()).filter(Boolean);
   if(teamIDs.length>50||teamIDs.some(id=>id.length>40))throw Error('Follow up to 50 teams, with IDs no longer than 40 characters');
@@ -363,15 +371,34 @@ $('form').onsubmit=e=>{
   if(teamId&&!teamIDs.includes(teamId))throw Error('Choose a sound team from your followed teams.');
   if(teamId&&!draftSound)throw Error('Upload a WAV sound for the selected team.');
   const next={localTimes:$('localtimes').checked,refreshSeconds:interval,name:$('boardname').value,teams:$('teams').value,format:$('timeformat').value,formulas:$('formulas').value,columns};
-  // Keep an uploaded sound even when alerts are switched off.
-  if(draftSound)next.soundAlert={teamId,name:draftSound.name,dataUrl:draftSound.dataUrl};
-  try{localStorage.setItem('cypat-config',JSON.stringify(next))}catch{throw Error('Settings could not be saved. Browser storage may be full or blocked; try a smaller WAV. Your previous settings are unchanged.')}
-  config=next;savedSound=draftSound;scoreGains.reset();scoreGains.observe(data,teamId);
+  // Resume during the click, before waiting for persistent sound storage.
   if(teamId)soundPlayer.enable().catch(updateSoundButton);
+  soundSaving=true;
+  disabledControls=[...$('form').elements].map(control=>[control,control.disabled]);
+  for(const [control]of disabledControls)control.disabled=true;
+  if(draftSound){
+   let soundId=draftSound.id;
+   if(!soundId){
+    try{soundId=pendingSoundId=await soundStore.save(draftSound)}catch{throw Error('Sound could not be saved. Browser storage may be full or blocked. Your previous settings are unchanged.')}
+   }
+   next.soundAlert={teamId,name:draftSound.name,soundId};
+  }
+  try{localStorage.setItem('cypat-config',JSON.stringify(next))}catch{throw Error('Settings could not be saved. Browser storage may be full or blocked. Your previous settings are unchanged.')}
+  const previousSoundId=config.soundAlert?.soundId;
+  config=next;savedSound=draftSound?{...draftSound,id:next.soundAlert.soundId}:null;
+  pendingSoundId=null;
+  if(previousSoundId&&previousSoundId!==next.soundAlert?.soundId)soundStore.remove(previousSoundId).catch(()=>{});
+  scoreGains.reset();scoreGains.observe(data,teamId);
   updateSoundButton();$('settings').close();render();
   if(selected){const row=rows().find(r=>r.TeamID===selected);if(row)details(row,true)}
   nextFetchTarget=0;load();
- }catch(err){$('configerror').textContent=err.message}
+ }catch(err){
+  if(pendingSoundId)soundStore.remove(pendingSoundId).catch(()=>{});
+  $('configerror').textContent=err.message;
+ }finally{
+  soundSaving=false;
+  for(const [control,disabled]of disabledControls||[])control.disabled=disabled;
+ }
 };
 $('close').onclick=()=>{hideGraphTooltip();selected=null;request++;setDetailsVisible(false);render()};
 $('date').textContent=new Date().toLocaleDateString();
