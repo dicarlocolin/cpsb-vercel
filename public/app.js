@@ -4,6 +4,7 @@ import {totalImageHistory} from './history.mjs';
 import {detailsFraction} from './layout.mjs';
 import {createObservations} from './observations.mjs';
 import {applyPreset} from './presets.mjs';
+import {readWav, createScoreGainTracker, createSoundPlayer} from './sounds.mjs';
 let observationStorage;try{observationStorage=localStorage}catch{}
 const observations=createObservations(observationStorage);
 const $=id=>document.getElementById(id), fields={Pos:'Pos.',Overall:'Overall',TeamID:'Team ID',TeamName:'Team Name',Score:'Score',TimeSeconds:'Time',Active:'Active',Images:'Images',VulnsFound:'Found',VulnsRemaining:'Remain',Location:'Location',Division:'Division',Tier:'Tier',Warnings:'Warnings'};
@@ -11,6 +12,28 @@ let config=applyPreset(new URL(location.href),observationStorage,history);
 if(!config)try{config=JSON.parse(localStorage.getItem('cypat-config'))}catch{}config||={name:'CyPat Scoreboard',teams:'19-0512\n19-1074\n19-0479',format:'HH:MM:SS',columns:['Pos','Overall','TeamID','TeamName','Score','TimeSeconds','PPM','Warnings'],formulas:'PPM = Score / TimeMinutes'};
 config.refreshSeconds ||= 60;
 config.localTimes ??= false;
+const scoreGains=createScoreGainTracker();
+const soundPlayer=createSoundPlayer(updateSoundButton);
+let savedSound=null,draftSound=null,soundLoading=false,soundRead=0;
+function updateSoundButton(){
+ const button=$('enablesound');
+ button.hidden=!config.soundAlert?.teamId;
+ button.textContent=soundPlayer.enabled?'Sound on':'Enable sound';
+ button.disabled=soundPlayer.enabled;
+}
+$('enablesound').onclick=()=>{soundPlayer.enable().catch(()=>{$('enablesound').textContent='Retry enabling sound'})};
+async function restoreSound(){
+ const alert=config.soundAlert;
+ if(!alert?.dataUrl?.startsWith('data:audio/wav;base64,'))return;
+ try{
+  const bytes=await (await fetch(alert.dataUrl)).arrayBuffer();
+  const buffer=await soundPlayer.decode(bytes);
+  if(config.soundAlert===alert)savedSound={name:alert.name,dataUrl:alert.dataUrl,buffer};
+ }catch{
+  if(config.soundAlert===alert){$('enablesound').textContent='Sound unavailable — configure again';$('enablesound').disabled=true}
+ }
+}
+updateSoundButton();$('configure').disabled=true;restoreSound().finally(()=>{$('configure').disabled=false});
 let refreshTimer, fetchInFlight=false, lastFetchDuration=0, nextFetchTarget=0;
 function scheduleRefresh(){
  clearTimeout(refreshTimer);
@@ -80,6 +103,7 @@ async function load(){
   const j=await r.json();if(!r.ok)throw Error(j.error);
   data=j.data;vulnTotals={...vulnTotals,...j.vulnTotals};lastFetch=j.fetchedAt*1000;activeTeams=observations.effectiveActivity(data,j.activeTeams,j.fetchedAt);activeFetchedAt=(j.activeFetchedAt||0)*1000;
   observations.record(data,activeTeams,j.fetchedAt,config.teams.split('\n').map(line=>line.split(',')[0].trim()).filter(Boolean));
+  if(scoreGains.observe(data,config.soundAlert?.teamId))soundPlayer.play(savedSound?.buffer);
   $('status').textContent=data.length?'':'The public scoreboard returned no teams.';
   render();if(selected){const row=rows().find(r=>r.TeamID===selected);if(row)details(row,true)}
  }catch(e){$('status').textContent=e.message+' Previous scores remain visible.';$('updated').textContent='Connection unavailable'}
@@ -277,4 +301,79 @@ function tickClocks(){
  }
 }
 setInterval(tickClocks,1000);
-$('configure').onclick=()=>{hideGraphTooltip();$('refreshinterval').value=config.refreshSeconds;$('boardname').value=config.name;$('teams').value=config.teams;$('timeformat').value=config.format;$('localtimes').checked=config.localTimes;$('localtimezone').textContent=displayTimeZone(true);$('formulas').value=config.formulas;$('configerror').textContent='';$('columns').replaceChildren();for(const [k,v]of Object.entries(fields)){let l=el('label'),c=el('input');c.type='checkbox';c.value=k;c.checked=config.columns.includes(k);l.append(c,document.createTextNode(' '+v));$('columns').append(l)}$('settings').showModal()};$('cancel').onclick=()=>$('settings').close();$('form').onsubmit=e=>{e.preventDefault();try{const teamIDs=$('teams').value.split('\n').map(line=>line.split(',')[0].trim()).filter(Boolean);if(teamIDs.length>50||teamIDs.some(id=>id.length>40))throw Error('Follow up to 50 teams, with IDs no longer than 40 characters');const fs=formulas($('formulas').value);let vals={Score:1,TimeMinutes:1,TimeHours:1,TimeSeconds:1,Images:1,VulnsFound:1,VulnsRemaining:1,Overall:1};for(const [k,v]of fs){if(Object.hasOwn(vals,k))throw Error('Duplicate field: '+k);vals[k]=evaluate(v,vals)}const columns=[...$('columns').querySelectorAll('input:checked')].map(x=>x.value).concat(fs.map(x=>x[0]));if(!columns.length)throw Error('Select at least one column');const interval=Number($('refreshinterval').value);if(!Number.isInteger(interval)||interval<15||interval>3600)throw Error('Refresh interval must be 15–3600 seconds');config={localTimes:$('localtimes').checked,refreshSeconds:interval,name:$('boardname').value,teams:$('teams').value,format:$('timeformat').value,formulas:$('formulas').value,columns};localStorage.setItem('cypat-config',JSON.stringify(config));$('settings').close();render();if(selected){const row=rows().find(r=>r.TeamID===selected);if(row)details(row,true)}nextFetchTarget=0;load()}catch(err){$('configerror').textContent=err.message}};$('close').onclick=()=>{hideGraphTooltip();selected=null;request++;setDetailsVisible(false);render()};$('date').textContent=new Date().toLocaleDateString();setInterval(()=>{if(lastFetch&&!fetchInFlight)$('updated').textContent=Math.max(0,Math.floor((Date.now()-lastFetch)/1000))+' seconds ago'},1000);render();load();
+function updateSoundDraft(){
+ $('soundname').textContent=soundLoading?'Loading sound…':draftSound?.name||'No sound uploaded.';
+ $('testsound').disabled=soundLoading||!draftSound;
+ $('removesound').disabled=soundLoading||!draftSound;
+}
+function updateSoundTeams(){
+ const selected=$('soundteam').value;
+ const options=[el('option','Off')];options[0].value='';
+ const seen=new Set();
+ for(const line of $('teams').value.split('\n')){
+  const [raw,...alias]=line.split(','),id=raw.trim();
+  if(!id||seen.has(id))continue;seen.add(id);
+  const name=alias.join(',').trim()||data.find(row=>String(row.team_number)===id)?.team_name;
+  const option=el('option',name?name+' · '+id:id);option.value=id;options.push(option);
+ }
+ $('soundteam').replaceChildren(...options);
+ $('soundteam').value=seen.has(selected)?selected:'';
+}
+$('teams').addEventListener('input',updateSoundTeams);
+$('soundfile').onchange=async()=>{
+ const file=$('soundfile').files[0];if(!file)return;
+ const token=++soundRead;soundLoading=true;$('sounderror').textContent='';updateSoundDraft();
+ try{
+  const wav=await readWav(file),buffer=await soundPlayer.decode(wav.bytes);
+  if(token===soundRead)draftSound={name:wav.name,dataUrl:wav.dataUrl,buffer};
+ }catch(error){if(token===soundRead)$('sounderror').textContent=error.message}
+ finally{if(token===soundRead){soundLoading=false;updateSoundDraft();$('soundfile').value=''}}
+};
+$('testsound').onclick=()=>{
+ $('sounderror').textContent='';
+ soundPlayer.enable().then(()=>soundPlayer.play(draftSound?.buffer)).catch(()=>{$('sounderror').textContent='Sound is blocked. Allow audio in your browser, then try again.'});
+};
+$('removesound').onclick=()=>{draftSound=null;soundPlayer.stop();$('soundteam').value='';$('soundfile').value='';$('sounderror').textContent='';updateSoundDraft()};
+$('configure').onclick=()=>{
+ hideGraphTooltip();$('refreshinterval').value=config.refreshSeconds;$('boardname').value=config.name;
+ $('teams').value=config.teams;$('timeformat').value=config.format;$('localtimes').checked=config.localTimes;
+ $('localtimezone').textContent=displayTimeZone(true);$('formulas').value=config.formulas;$('configerror').textContent='';
+ draftSound=savedSound;soundRead++;soundLoading=false;$('sounderror').textContent='';$('soundfile').value='';
+ updateSoundTeams();$('soundteam').value=config.soundAlert?.teamId||'';updateSoundDraft();
+ $('columns').replaceChildren();
+ for(const [k,v]of Object.entries(fields)){let l=el('label'),c=el('input');c.type='checkbox';c.value=k;c.checked=config.columns.includes(k);l.append(c,document.createTextNode(' '+v));$('columns').append(l)}
+ $('settings').showModal();
+};
+$('cancel').onclick=()=>$('settings').close();
+$('settings').addEventListener('close',()=>{soundRead++;soundLoading=false;soundPlayer.stop()});
+$('form').onsubmit=e=>{
+ e.preventDefault();
+ try{
+  const teamIDs=$('teams').value.split('\n').map(line=>line.split(',')[0].trim()).filter(Boolean);
+  if(teamIDs.length>50||teamIDs.some(id=>id.length>40))throw Error('Follow up to 50 teams, with IDs no longer than 40 characters');
+  const fs=formulas($('formulas').value);
+  let vals={Score:1,TimeMinutes:1,TimeHours:1,TimeSeconds:1,Images:1,VulnsFound:1,VulnsRemaining:1,Overall:1};
+  for(const [k,v]of fs){if(Object.hasOwn(vals,k))throw Error('Duplicate field: '+k);vals[k]=evaluate(v,vals)}
+  const columns=[...$('columns').querySelectorAll('input:checked')].map(x=>x.value).concat(fs.map(x=>x[0]));
+  if(!columns.length)throw Error('Select at least one column');
+  const interval=Number($('refreshinterval').value);
+  if(!Number.isInteger(interval)||interval<15||interval>3600)throw Error('Refresh interval must be 15–3600 seconds');
+  if(soundLoading)throw Error('Wait for the sound to finish loading.');
+  const teamId=$('soundteam').value;
+  if(teamId&&!teamIDs.includes(teamId))throw Error('Choose a sound team from your followed teams.');
+  if(teamId&&!draftSound)throw Error('Upload a WAV sound for the selected team.');
+  const next={localTimes:$('localtimes').checked,refreshSeconds:interval,name:$('boardname').value,teams:$('teams').value,format:$('timeformat').value,formulas:$('formulas').value,columns};
+  // Keep an uploaded sound even when alerts are switched off.
+  if(draftSound)next.soundAlert={teamId,name:draftSound.name,dataUrl:draftSound.dataUrl};
+  try{localStorage.setItem('cypat-config',JSON.stringify(next))}catch{throw Error('Settings could not be saved. Browser storage may be full or blocked; try a smaller WAV. Your previous settings are unchanged.')}
+  config=next;savedSound=draftSound;scoreGains.reset();scoreGains.observe(data,teamId);
+  if(teamId)soundPlayer.enable().catch(updateSoundButton);
+  updateSoundButton();$('settings').close();render();
+  if(selected){const row=rows().find(r=>r.TeamID===selected);if(row)details(row,true)}
+  nextFetchTarget=0;load();
+ }catch(err){$('configerror').textContent=err.message}
+};
+$('close').onclick=()=>{hideGraphTooltip();selected=null;request++;setDetailsVisible(false);render()};
+$('date').textContent=new Date().toLocaleDateString();
+setInterval(()=>{if(lastFetch&&!fetchInFlight)$('updated').textContent=Math.max(0,Math.floor((Date.now()-lastFetch)/1000))+' seconds ago'},1000);
+render();load();

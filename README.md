@@ -22,6 +22,10 @@ Vercel serves HTML/CSS/JavaScript directly from `public`. `/api/scores` and `/ap
 
 Configure team IDs, aliases, columns, formulas, time zones, refresh interval (15–3600 seconds), and panel height in the interface. Settings persist in browser storage.
 
+Configure → Score sound lets you upload a `.wav` file (up to 2 MB), choose one followed team, and test the recording. Confirm saves the sound and team in this browser with the rest of the configuration. Selecting Off pauses alerts while keeping the uploaded recording; Remove sound clears it on Confirm. Cancel discards sound edits. Recordings stay on the device and are not uploaded to a server or shared with other visitors.
+
+A sound plays once per successful score refresh when the selected team's CCS total increases relative to its previous valid score in this page session. The first sample, unchanged scores, decreases, missing/invalid scores, and other teams' changes stay silent. Changing the configuration starts a new baseline. Confirm or Test sound enables browser audio; after a reload, click Enable sound in the header. Alerts require an open page and follow its refresh interval; background tabs can be delayed by the browser. If browser storage is blocked or full, Confirm reports the error and preserves the previous settings.
+
 Visit `/lasa` to return to the home page and load the LASA CyberPatriot preset: all 14 LASA teams and aliases, HH:MM:SS, local timestamps, a 30-second refresh interval, all columns except Division/Tier/Location/Images, and PPM/PPH formulas. This replaces the saved scoreboard settings in that browser. The home page then uses the saved settings normally; revisit `/lasa` to reapply the preset.
 
 The public image-history graph and its summed total come from CyberPatriot. Per-image gaps remain gaps; the summed total carries forward each image's last known score once it first reports. Times default to UTC and can display in the device's local zone.

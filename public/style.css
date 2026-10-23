@@ -15,3 +15,6 @@ html{height:100%;overflow:hidden}body{height:100dvh;overflow:hidden;display:flex
 
 /* The divider is the gap between the table and the details panel. */
 main{gap:0}.tablebox{min-height:70px}#details{min-height:120px}#detailsresize{height:12px;flex:0 0 12px;cursor:row-resize;touch-action:none;display:flex;align-items:center;justify-content:center;border-radius:4px}#detailsresize[hidden]{display:none}#detailsresize>span{display:flex;gap:4px;padding:2px 12px}#detailsresize i{display:block;width:4px;height:4px;border-radius:50%;background:#ffffff66}#detailsresize:hover i,#detailsresize:focus-visible i,.resizing-details #detailsresize i{background:#8eb5ff}#detailsresize:focus-visible{outline:2px solid #8eb5ff;outline-offset:-2px}.resizing-details,.resizing-details *{cursor:row-resize!important;user-select:none!important}
+
+/* Score sound controls share the existing configuration styles. */
+header #enablesound{margin-left:auto}header #enablesound:not([hidden])+#configure{margin-left:0}.soundactions{display:flex;gap:8px;flex-wrap:wrap}button:disabled{opacity:.45;cursor:default;filter:none}#sounderror{color:#ffaaaa}#soundsettings label:first-of-type{margin-top:8px}#soundhelp{line-height:1.5}#soundname{overflow-wrap:anywhere}
