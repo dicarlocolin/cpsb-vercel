@@ -20,6 +20,8 @@ Vercel serves HTML/CSS/JavaScript directly from `public`. `/api/scores` and `/ap
 
 ## Settings, history, and activity
 
+On score updates, the Score column turns blue (`#5789FF`) for gains or red (`#FF383C`) for losses. The color holds for five seconds, then fades to white over one second. Initial and unchanged scores stay white; sorting or opening details preserves the highlight timing. Each new score change restarts the effect.
+
 Configure team IDs, aliases, columns, formulas, time zones, refresh interval (15–3600 seconds), and panel height in the interface. Settings persist in browser storage.
 
 Configure → Score sound lets you upload a `.wav` file (no application size cap; available browser storage and memory apply), choose one followed team, and test the recording. Confirm saves the sound and team in this browser with the rest of the configuration. Selecting Off pauses alerts while keeping the uploaded recording; Remove sound clears it on Confirm. Cancel discards sound edits. Recordings are stored in IndexedDB separately from the settings, so larger files do not fill localStorage. Previously saved recordings continue working and migrate on Confirm. Recordings stay on the device and are not uploaded to a server or shared with other visitors.

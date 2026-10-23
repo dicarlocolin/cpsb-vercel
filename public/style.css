@@ -18,3 +18,7 @@ main{gap:0}.tablebox{min-height:70px}#details{min-height:120px}#detailsresize{he
 
 /* Score sound controls share the existing configuration styles. */
 header #enablesound{margin-left:auto}header #enablesound:not([hidden])+#configure{margin-left:0}.soundactions{display:flex;gap:8px;flex-wrap:wrap}button:disabled{opacity:.45;cursor:default;filter:none}#sounderror{color:#ffaaaa}#soundsettings label:first-of-type{margin-top:8px}#soundhelp{line-height:1.5}#soundname{overflow-wrap:anywhere}
+
+/* Hold score changes for five seconds, then fade to white over one second. */
+td[data-field="Score"].score-change{animation:score-change 6s linear}
+@keyframes score-change{0%,83.333333%{color:var(--score-change-color)}100%{color:#fff}}
