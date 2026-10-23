@@ -4,10 +4,16 @@ const path = require('node:path');
 const {createScoreboard} = require('../lib/scoreboard.cjs');
 const api = createScoreboard();
 const root = path.resolve(__dirname, '../public');
+const {redirects} = require('../vercel.json');
 const types = {'.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml'};
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname.startsWith('/api/')) return api(req, res);
+  const redirect = redirects.find(rule => rule.source === url.pathname);
+  if (redirect) {
+    res.writeHead(redirect.permanent ? 308 : 307, {Location: redirect.destination});
+    res.end(); return;
+  }
   try {
     const file = path.resolve(root, '.' + (decodeURIComponent(url.pathname) === '/' ? '/index.html' : decodeURIComponent(url.pathname)));
     if (!file.startsWith(root + path.sep)) {res.writeHead(403); res.end(); return;}

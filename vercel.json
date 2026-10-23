@@ -4,14 +4,34 @@
   "buildCommand": "",
   "outputDirectory": "public",
   "functions": {
-    "api/*.js": { "maxDuration": 60 }
+    "api/*.js": {
+      "maxDuration": 60
+    }
   },
+  "redirects": [
+    {
+      "source": "/lasa",
+      "destination": "/?preset=lasa",
+      "permanent": false
+    },
+    {
+      "source": "/lasa/",
+      "destination": "/?preset=lasa",
+      "permanent": false
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
       ]
     }
   ]

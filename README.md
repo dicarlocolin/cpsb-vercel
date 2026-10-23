@@ -22,6 +22,8 @@ Vercel serves HTML/CSS/JavaScript directly from `public`. `/api/scores` and `/ap
 
 Configure team IDs, aliases, columns, formulas, time zones, refresh interval (15–3600 seconds), and panel height in the interface. Settings persist in browser storage.
 
+Visit `/lasa` to return to the home page and load the LASA CyberPatriot preset: all 14 LASA teams and aliases, HH:MM:SS, local timestamps, a 30-second refresh interval, all columns except Division/Tier/Location/Images, and PPM/PPH formulas. This replaces the saved scoreboard settings in that browser. The home page then uses the saved settings normally; revisit `/lasa` to reapply the preset.
+
 The public image-history graph and its summed total come from CyberPatriot. Per-image gaps remain gaps; the summed total carries forward each image's last known score once it first reports. Times default to UTC and can display in the device's local zone.
 
 Observed CCS totals are saved **in this browser**, for followed teams only, with up to seven days / 3,000 points per team (up to 50 teams). They do not sync across devices or visitors and do not import the existing local SQLite database. Removing a team prunes its observed history on the next successful poll. Clearing site data clears observations. If browser storage is blocked or full, current-session observations remain available but may not survive reloads. Preview URLs and custom domains have separate browser storage.

@@ -3,10 +3,12 @@ import {imageActivity, livePlayTime} from './activity.mjs';
 import {totalImageHistory} from './history.mjs';
 import {detailsFraction} from './layout.mjs';
 import {createObservations} from './observations.mjs';
+import {applyPreset} from './presets.mjs';
 let observationStorage;try{observationStorage=localStorage}catch{}
 const observations=createObservations(observationStorage);
 const $=id=>document.getElementById(id), fields={Pos:'Pos.',Overall:'Overall',TeamID:'Team ID',TeamName:'Team Name',Score:'Score',TimeSeconds:'Time',Active:'Active',Images:'Images',VulnsFound:'Found',VulnsRemaining:'Remain',Location:'Location',Division:'Division',Tier:'Tier',Warnings:'Warnings'};
-let config;try{config=JSON.parse(localStorage.getItem('cypat-config'))}catch{}config||={name:'CyPat Scoreboard',teams:'19-0512\n19-1074\n19-0479',format:'HH:MM:SS',columns:['Pos','Overall','TeamID','TeamName','Score','TimeSeconds','PPM','Warnings'],formulas:'PPM = Score / TimeMinutes'};
+let config=applyPreset(new URL(location.href),observationStorage,history);
+if(!config)try{config=JSON.parse(localStorage.getItem('cypat-config'))}catch{}config||={name:'CyPat Scoreboard',teams:'19-0512\n19-1074\n19-0479',format:'HH:MM:SS',columns:['Pos','Overall','TeamID','TeamName','Score','TimeSeconds','PPM','Warnings'],formulas:'PPM = Score / TimeMinutes'};
 config.refreshSeconds ||= 60;
 config.localTimes ??= false;
 let refreshTimer, fetchInFlight=false, lastFetchDuration=0, nextFetchTarget=0;
