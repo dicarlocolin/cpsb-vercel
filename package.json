@@ -1,0 +1,14 @@
+{
+  "name": "cypat-scoreboard",
+  "version": "1.0.0",
+  "description": "CyberPatriot scoreboard website for Vercel",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "start": "node scripts/dev.cjs",
+    "dev": "node scripts/dev.cjs",
+    "test": "node --test test/*.test.cjs"
+  }
+}
