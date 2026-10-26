@@ -3,16 +3,19 @@ import {imageActivity, livePlayTime} from './activity.mjs';
 import {totalImageHistory} from './history.mjs';
 import {detailsFraction} from './layout.mjs';
 import {createScoreHighlights} from './score-highlights.mjs';
+import {teamScores, migrateScoreConfig} from './scores.mjs';
 import {createObservations} from './observations.mjs';
 import {applyPreset} from './presets.mjs';
 import {readWav, createScoreGainTracker, createSoundPlayer} from './sounds.mjs';
 import {createSoundStore} from './sound-storage.mjs';
-const scoreHighlights=createScoreHighlights();
+const scoreHighlights=createScoreHighlights(), totalScoreHighlights=createScoreHighlights();
 let observationStorage;try{observationStorage=localStorage}catch{}
 const observations=createObservations(observationStorage);
-const $=id=>document.getElementById(id), fields={Pos:'Pos.',Overall:'Overall',TeamID:'Team ID',TeamName:'Team Name',Score:'Score',TimeSeconds:'Time',Active:'Active',Images:'Images',VulnsFound:'Found',VulnsRemaining:'Remain',Location:'Location',Division:'Division',Tier:'Tier',Warnings:'Warnings'};
+const $=id=>document.getElementById(id), fields={Pos:'Pos.',Overall:'Overall',TeamID:'Team ID',TeamName:'Team Name',Score:'Score',CCSScore:'CCS Score',NetAcadPT:'NetAcad PT',NetAcadQuiz:'NetAcad Quiz',TimeSeconds:'Time',Active:'Active',Images:'Images',VulnsFound:'Found',VulnsRemaining:'Remain',Location:'Location',Division:'Division',Tier:'Tier',Warnings:'Warnings'};
 let config=applyPreset(new URL(location.href),observationStorage,history);
-if(!config)try{config=JSON.parse(localStorage.getItem('cypat-config'))}catch{}config||={name:'CyPat Scoreboard',teams:'19-0512\n19-1074\n19-0479',format:'HH:MM:SS',columns:['Pos','Overall','TeamID','TeamName','Score','TimeSeconds','PPM','Warnings'],formulas:'PPM = Score / TimeMinutes'};
+if(!config)try{config=JSON.parse(localStorage.getItem('cypat-config'))}catch{}config||={scoreVersion:1,name:'CyPat Scoreboard',teams:'19-0512\n19-1074\n19-0479',format:'HH:MM:SS',columns:['Pos','Overall','TeamID','TeamName','Score','CCSScore','TimeSeconds','PPM','Warnings'],formulas:'PPM = CCSScore / TimeMinutes'};
+config=migrateScoreConfig(config);
+try{localStorage.setItem('cypat-config',JSON.stringify(config))}catch{}
 config.refreshSeconds ||= 60;
 config.localTimes ??= false;
 const soundStore=createSoundStore();
@@ -94,8 +97,8 @@ function evaluate(source,values){const tokens=source.match(/[A-Za-z_][A-Za-z_0-9
 function formulas(text){return text.split('\n').filter(x=>x.trim()).map(line=>{const m=line.match(/^\s*([A-Za-z_][A-Za-z_0-9]*)\s*=\s*(.+)$/);if(!m)throw Error('Use Name = expression');if(Object.hasOwn(fields,m[1]))throw Error('Choose a different column name');return [m[1],m[2]]})}
 function seconds(t){return String(t||'').split(':').reduce((a,b)=>a*60+Number(b),0)}
 function time(s){if(!Number.isFinite(s))return '—';if(config.format==='minutes')return (s/60).toFixed(2);if(config.format==='hours')return(s/3600).toFixed(2);let h=Math.floor(s/3600),m=Math.floor(s%3600/60),v=Math.floor(s%60);return [h,m,...(config.format==='HH:MM:SS'?[v]:[])].map(n=>String(n).padStart(2,'0')).join(':')}
-function rows(){const teams=config.teams.split('\n').filter(x=>x.trim()).map(x=>{let [id,...alias]=x.split(',');return [id.trim(),alias.join(',').trim()]});const ranked=teams.map(([id])=>id).filter(id=>data.some(r=>String(r.team_number)===id)).sort((a,b)=>data.findIndex(r=>String(r.team_number)===a)-data.findIndex(r=>String(r.team_number)===b));return teams.map(([id,alias],i)=>{let d=data.find(r=>String(r.team_number)===id);const s=d?livePlayTime(seconds(d.play_time),id,lastFetch,activeTeams,activeFetchedAt):NaN;let r={Pos:d?ranked.indexOf(id)+1:null,Overall:d?data.indexOf(d)+1:null,TeamID:id,TeamName:alias||d?.team_name||id,Score:d?Number(d.ccs_score):NaN,TimeSeconds:s,TimeMinutes:s/60,TimeHours:s/3600,Images:d?.images,VulnsFound:d?vulnTotals[id]?.found??NaN:NaN,VulnsRemaining:d?vulnTotals[id]?.remaining??NaN:NaN,ImageActivity:imageActivity(id,activeTeams,activeFetchedAt),Location:d?.location,Division:d?.division,Tier:d?.tier,Warnings:d?.code||'—',missing:!d};r.Active=activityLabel(r.ImageActivity);for(const [name,f]of formulas(config.formulas)){try{r[name]=evaluate(f,r)}catch{r[name]=NaN}}return r})}
-function render(){ $('title').textContent=config.name;$('head').replaceChildren();const hr=el('tr');for(const key of config.columns){const th=el('th',null,key==='TeamName'?'name':'');th.setAttribute('aria-sort',sort===key?(direction<0?'descending':'ascending'):'none');const b=el('button',fields[key]||key);if(sort===key){const im=el('img');im.src='assets/chevron.svg';im.alt=direction<0?'Descending':'Ascending';if(direction>0)im.style.transform='rotate(180deg)';b.append(im)}b.onclick=()=>{direction=sort===key?-direction:1;sort=key;render()};th.append(b);hr.append(th)}$('head').append(hr);$('rows').replaceChildren();let rs=rows().sort((a,b)=>{let x=a[sort],y=b[sort];if(x==null||Number.isNaN(x))return 1;if(y==null||Number.isNaN(y))return -1;return direction*(typeof x==='number'?x-y:String(x).localeCompare(String(y)))});for(const r of rs){let tr=el('tr',null,selected===r.TeamID?'selected':'');tr.dataset.teamId=r.TeamID;tr.tabIndex=0;tr.setAttribute('aria-label','Details for '+r.TeamName);for(const k of config.columns){let v=r[k];if(k==='TimeSeconds')v=time(v);else if(typeof v==='number')v=Number.isFinite(v)?(Number.isInteger(v)?v:v.toFixed(2)):'—';const cell=el('td',v??'—',k==='TeamName'?'name':'');cell.dataset.field=k;if(k==='Score'){const highlight=scoreHighlights.get(r.TeamID);if(highlight){cell.classList.add('score-change');cell.style.setProperty('--score-change-color',highlight.color);cell.style.animationDelay=`-${highlight.elapsed}ms`}}tr.append(cell)}tr.onclick=()=>toggleDetails(r);tr.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleDetails(r)}};$('rows').append(tr)}if(!rs.length)$('status').textContent='Configure the team IDs you want to follow.'}
+function rows(){const teams=config.teams.split('\n').filter(x=>x.trim()).map(x=>{let [id,...alias]=x.split(',');return [id.trim(),alias.join(',').trim()]});const ranked=teams.map(([id])=>id).filter(id=>data.some(r=>String(r.team_number)===id)).sort((a,b)=>data.findIndex(r=>String(r.team_number)===a)-data.findIndex(r=>String(r.team_number)===b));return teams.map(([id,alias],i)=>{let d=data.find(r=>String(r.team_number)===id);const s=d?livePlayTime(seconds(d.play_time),id,lastFetch,activeTeams,activeFetchedAt):NaN;let r={Pos:d?ranked.indexOf(id)+1:null,Overall:d?data.indexOf(d)+1:null,TeamID:id,TeamName:alias||d?.team_name||id,...teamScores(d),TimeSeconds:s,TimeMinutes:s/60,TimeHours:s/3600,Images:d?.images,VulnsFound:d?vulnTotals[id]?.found??NaN:NaN,VulnsRemaining:d?vulnTotals[id]?.remaining??NaN:NaN,ImageActivity:imageActivity(id,activeTeams,activeFetchedAt),Location:d?.location,Division:d?.division,Tier:d?.tier,Warnings:d?.code||'—',missing:!d};r.Active=activityLabel(r.ImageActivity);for(const [name,f]of formulas(config.formulas)){try{r[name]=evaluate(f,r)}catch{r[name]=NaN}}return r})}
+function render(){ $('title').textContent=config.name;$('head').replaceChildren();const hr=el('tr');for(const key of config.columns){const th=el('th',null,key==='TeamName'?'name':'');th.setAttribute('aria-sort',sort===key?(direction<0?'descending':'ascending'):'none');const b=el('button',fields[key]||key);if(sort===key){const im=el('img');im.src='assets/chevron.svg';im.alt=direction<0?'Descending':'Ascending';if(direction>0)im.style.transform='rotate(180deg)';b.append(im)}b.onclick=()=>{direction=sort===key?-direction:1;sort=key;render()};th.append(b);hr.append(th)}$('head').append(hr);$('rows').replaceChildren();let rs=rows().sort((a,b)=>{let x=a[sort],y=b[sort];if(x==null||Number.isNaN(x))return 1;if(y==null||Number.isNaN(y))return -1;return direction*(typeof x==='number'?x-y:String(x).localeCompare(String(y)))});for(const r of rs){let tr=el('tr',null,selected===r.TeamID?'selected':'');tr.dataset.teamId=r.TeamID;tr.tabIndex=0;tr.setAttribute('aria-label','Details for '+r.TeamName);for(const k of config.columns){let v=r[k];if(k==='TimeSeconds')v=time(v);else if(typeof v==='number')v=Number.isFinite(v)?(Number.isInteger(v)?v:v.toFixed(2)):'—';const cell=el('td',v??'—',k==='TeamName'?'name':'');cell.dataset.field=k;if(k==='Score'||k==='CCSScore'){const highlight=(k==='Score'?totalScoreHighlights:scoreHighlights).get(r.TeamID);if(highlight){cell.classList.add('score-change');cell.style.setProperty('--score-change-color',highlight.color);cell.style.animationDelay=`-${highlight.elapsed}ms`}}tr.append(cell)}tr.onclick=()=>toggleDetails(r);tr.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleDetails(r)}};$('rows').append(tr)}if(!rs.length)$('status').textContent='Configure the team IDs you want to follow.'}
 async function load(){
  if(fetchInFlight)return;
  clearTimeout(refreshTimer);fetchInFlight=true;
@@ -110,6 +113,7 @@ async function load(){
   const r=await fetch('/api/scores?'+query,{cache:'no-store'});
   const j=await r.json();if(!r.ok)throw Error(j.error);
   scoreHighlights.observe(j.data);
+  totalScoreHighlights.observe(j.data.map(team=>({team_number:team.team_number,ccs_score:team.total})));
   data=j.data;vulnTotals={...vulnTotals,...j.vulnTotals};lastFetch=j.fetchedAt*1000;activeTeams=observations.effectiveActivity(data,j.activeTeams,j.fetchedAt);activeFetchedAt=(j.activeFetchedAt||0)*1000;
   observations.record(data,activeTeams,j.fetchedAt,config.teams.split('\n').map(line=>line.split(',')[0].trim()).filter(Boolean));
   if(scoreGains.observe(data,config.soundAlert?.teamId))soundPlayer.play(savedSound?.buffer);
@@ -250,7 +254,7 @@ async function details(r,refresh=false){
  if(!detailView||detailView.id!==r.TeamID)detailView=openDetailView(r.TeamID);
  const view=detailView;
  const title=r.TeamName+'  ·  '+r.TeamID;if($('teamtitle').textContent!==title)$('teamtitle').textContent=title;
- for(const k of ['Score','TimeSeconds','Overall','Images','Division','Tier','Location','Warnings']){
+ for(const k of ['Score','CCSScore','NetAcadPT','NetAcadQuiz','TimeSeconds','Overall','Images','Division','Tier','Location','Warnings']){
   const entry=setStat(view,k,k==='Images'?'Scored images':fields[k],k==='TimeSeconds'?time(r[k]):Number.isNaN(r[k])?'—':r[k]);
   if(k==='TimeSeconds')entry.id='detailtime';
  }
@@ -363,7 +367,7 @@ $('form').onsubmit=async e=>{
   const teamIDs=$('teams').value.split('\n').map(line=>line.split(',')[0].trim()).filter(Boolean);
   if(teamIDs.length>50||teamIDs.some(id=>id.length>40))throw Error('Follow up to 50 teams, with IDs no longer than 40 characters');
   const fs=formulas($('formulas').value);
-  let vals={Score:1,TimeMinutes:1,TimeHours:1,TimeSeconds:1,Images:1,VulnsFound:1,VulnsRemaining:1,Overall:1};
+  let vals={Score:1,CCSScore:1,NetAcadPT:1,NetAcadQuiz:1,TimeMinutes:1,TimeHours:1,TimeSeconds:1,Images:1,VulnsFound:1,VulnsRemaining:1,Overall:1};
   for(const [k,v]of fs){if(Object.hasOwn(vals,k))throw Error('Duplicate field: '+k);vals[k]=evaluate(v,vals)}
   const columns=[...$('columns').querySelectorAll('input:checked')].map(x=>x.value).concat(fs.map(x=>x[0]));
   if(!columns.length)throw Error('Select at least one column');
@@ -373,7 +377,7 @@ $('form').onsubmit=async e=>{
   const teamId=$('soundteam').value;
   if(teamId&&!teamIDs.includes(teamId))throw Error('Choose a sound team from your followed teams.');
   if(teamId&&!draftSound)throw Error('Upload a WAV sound for the selected team.');
-  const next={localTimes:$('localtimes').checked,refreshSeconds:interval,name:$('boardname').value,teams:$('teams').value,format:$('timeformat').value,formulas:$('formulas').value,columns};
+  const next={scoreVersion:1,localTimes:$('localtimes').checked,refreshSeconds:interval,name:$('boardname').value,teams:$('teams').value,format:$('timeformat').value,formulas:$('formulas').value,columns};
   // Resume during the click, before waiting for persistent sound storage.
   if(teamId)soundPlayer.enable().catch(updateSoundButton);
   soundSaving=true;

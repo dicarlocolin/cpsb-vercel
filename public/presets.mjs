@@ -1,6 +1,7 @@
 export function applyPreset(url, storage, history) {
   if (url.searchParams.get('preset') !== 'lasa') return null;
   const config = {
+    scoreVersion: 1,
     name: 'LASA CyberPatriot',
     teams: [
       '19-3340, virus.exe',
@@ -21,8 +22,8 @@ export function applyPreset(url, storage, history) {
     format: 'HH:MM:SS',
     localTimes: true,
     refreshSeconds: 30,
-    columns: ['Pos', 'Overall', 'TeamID', 'TeamName', 'Score', 'TimeSeconds', 'Active', 'VulnsFound', 'VulnsRemaining', 'Warnings', 'PPM', 'PPH'],
-    formulas: 'PPM = Score / TimeMinutes\nPPH = Score / TimeHours'
+    columns: ['Pos', 'Overall', 'TeamID', 'TeamName', 'Score', 'CCSScore', 'NetAcadPT', 'NetAcadQuiz', 'TimeSeconds', 'Active', 'VulnsFound', 'VulnsRemaining', 'Warnings', 'PPM', 'PPH'],
+    formulas: 'PPM = CCSScore / TimeMinutes\nPPH = CCSScore / TimeHours'
   };
   try { storage?.setItem('cypat-config', JSON.stringify(config)); } catch {}
   url.searchParams.delete('preset');

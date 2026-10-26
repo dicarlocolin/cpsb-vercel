@@ -14,6 +14,7 @@ test('LASA preset replaces saved settings with all requested teams, columns and 
   const {config, history} = await fixture('/?preset=lasa', {setItem(key, value) {assert.equal(key, 'cypat-config'); saved = value;}});
   assert.deepEqual(JSON.parse(saved), config);
   assert.equal(config.name, 'LASA CyberPatriot');
+  assert.equal(config.scoreVersion, 1);
   assert.deepEqual(config.teams.split('\n'), [
     '19-3340, virus.exe', '19-1119, rm -rf /', `19-3341, under 5'4"`,
     '19-3342, iNc0gnITo mOd3!', '19-1120, Mango Company', '19-1121, Goodbye World',
@@ -24,8 +25,8 @@ test('LASA preset replaces saved settings with all requested teams, columns and 
   assert.equal(config.format, 'HH:MM:SS');
   assert.equal(config.localTimes, true);
   assert.equal(config.refreshSeconds, 30);
-  assert.deepEqual(config.columns, ['Pos', 'Overall', 'TeamID', 'TeamName', 'Score', 'TimeSeconds', 'Active', 'VulnsFound', 'VulnsRemaining', 'Warnings', 'PPM', 'PPH']);
-  assert.equal(config.formulas, 'PPM = Score / TimeMinutes\nPPH = Score / TimeHours');
+  assert.deepEqual(config.columns, ['Pos', 'Overall', 'TeamID', 'TeamName', 'Score', 'CCSScore', 'NetAcadPT', 'NetAcadQuiz', 'TimeSeconds', 'Active', 'VulnsFound', 'VulnsRemaining', 'Warnings', 'PPM', 'PPH']);
+  assert.equal(config.formulas, 'PPM = CCSScore / TimeMinutes\nPPH = CCSScore / TimeHours');
   assert.equal(history.address, '/');
   assert.deepEqual(history.replacedState, history.state);
 });
