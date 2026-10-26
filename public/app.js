@@ -11,7 +11,7 @@ import {createSoundStore} from './sound-storage.mjs';
 const scoreHighlights=createScoreHighlights(), totalScoreHighlights=createScoreHighlights();
 let observationStorage;try{observationStorage=localStorage}catch{}
 const observations=createObservations(observationStorage);
-const $=id=>document.getElementById(id), fields={Pos:'Pos.',Overall:'Overall',TeamID:'Team ID',TeamName:'Team Name',Score:'Score',CCSScore:'CCS Score',NetAcadPT:'NetAcad PT',NetAcadQuiz:'NetAcad Quiz',TimeSeconds:'Time',Active:'Active',Images:'Images',VulnsFound:'Found',VulnsRemaining:'Remain',Location:'Location',Division:'Division',Tier:'Tier',Warnings:'Warnings'};
+const $=id=>document.getElementById(id), fields={Pos:'Pos.',Overall:'Overall',TeamID:'Team ID',TeamName:'Team Name',Score:'Score',CCSScore:'CCS Score',NetAcadPT:'Cisco PT',NetAcadQuiz:'Cisco Quiz',TimeSeconds:'Time',Active:'Active',Images:'Images',VulnsFound:'Found',VulnsRemaining:'Remain',Location:'Location',Division:'Division',Tier:'Tier',Warnings:'Warnings'};
 let config=applyPreset(new URL(location.href),observationStorage,history);
 if(!config)try{config=JSON.parse(localStorage.getItem('cypat-config'))}catch{}config||={scoreVersion:1,name:'CyPat Scoreboard',teams:'19-0512\n19-1074\n19-0479',format:'HH:MM:SS',columns:['Pos','Overall','TeamID','TeamName','Score','CCSScore','TimeSeconds','PPM','Warnings'],formulas:'PPM = CCSScore / TimeMinutes'};
 config=migrateScoreConfig(config);
@@ -56,7 +56,7 @@ function scheduleRefresh(){
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!fetchInFlight){if(Date.now()>=nextFetchTarget)load();else scheduleRefresh()}});
 let activeTeams=null,activeFetchedAt=0,detailView=null,vulnTotals={};
 const detailCache=new Map();
-let data=[],sort='Score',direction=-1,selected=null,request=0,lastFetch=0;
+let data=[],sort='Pos',direction=1,selected=null,request=0,lastFetch=0;
 function el(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n}
 let detailsRatio=0.5,resizePointer=null;
 try{detailsRatio=detailsFraction(localStorage.getItem('cypat-details-height'))}catch{}

@@ -58,6 +58,7 @@ async function harness() {
   const {teamScores} = await scoresModule;
   const source = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
   const fields = source.match(/ fields=(\{.*\});/)[1];
+  const initialSort = source.match(/let data=\[\],sort='([^']+)',direction=(-?\d+)/);
   const elements = Object.fromEntries(['head', 'rows', 'status', 'title'].map(id => [id, new Element(id)]));
   const config = {
     name: 'Scores', teams: '19-a\n19-b\nmissing', format: 'HH:MM:SS',
@@ -70,7 +71,7 @@ async function harness() {
       {team_number: '19-a', ccs_score: '200', score_1: '10', score_2: '20', total: '230', play_time: '01:00:00'},
       {team_number: '19-b', ccs_score: '190', score_1: '25', score_2: '30', total: '245', play_time: '01:00:00'}
     ],
-    sort: 'Score', direction: -1, selected: null, vulnTotals: {}, lastFetch: 0, activeTeams: null, activeFetchedAt: 0,
+    sort: initialSort[1], direction: Number(initialSort[2]), selected: null, vulnTotals: {}, lastFetch: 0, activeTeams: null, activeFetchedAt: 0,
     livePlayTime: seconds => seconds, imageActivity: () => null, activityLabel: () => 'Unknown',
     scoreHighlights: {get: () => null}, totalScoreHighlights: {get: () => null},
     $: id => elements[id], el: (tag, text) => new Element(tag, text)
@@ -93,15 +94,19 @@ test('scoreboard rows expose each score to formulas and reserve the new column n
   }
 });
 
-test('table displays renamed headers, sorts numeric totals and components, and leaves missing scores last', async () => {
+test('table defaults to ascending position, displays Cisco headers, and sorts numeric scores with missing scores last', async () => {
   const {api, elements} = await harness();
   api.render();
   const headings = elements.head.children[0].children;
-  assert.deepEqual(headings.map(th => th.children[0].textContent), ['Team ID', 'Score', 'CCS Score', 'NetAcad PT', 'NetAcad Quiz', 'PPM']);
-  assert.deepEqual(elements.rows.children.map(row => row.dataset.teamId), ['19-b', '19-a', 'missing']);
-  assert.equal(elements.rows.children[0].children[1].textContent, 245);
+  assert.deepEqual(headings.map(th => th.children[0].textContent), ['Team ID', 'Score', 'CCS Score', 'Cisco PT', 'Cisco Quiz', 'PPM']);
+  assert.deepEqual(elements.rows.children.map(row => row.dataset.teamId), ['19-a', '19-b', 'missing']);
+  assert.equal(elements.rows.children[0].children[1].textContent, 230);
   assert.equal(elements.rows.children[2].children[1].textContent, '—');
-  headings[2].children[0].onclick();
+  headings[1].children[0].onclick();
+  assert.deepEqual(elements.rows.children.map(row => row.dataset.teamId), ['19-a', '19-b', 'missing']);
+  elements.head.children[0].children[1].children[0].onclick();
+  assert.deepEqual(elements.rows.children.map(row => row.dataset.teamId), ['19-b', '19-a', 'missing']);
+  elements.head.children[0].children[2].children[0].onclick();
   assert.deepEqual(elements.rows.children.map(row => row.dataset.teamId), ['19-b', '19-a', 'missing']);
   elements.head.children[0].children[2].children[0].onclick();
   assert.deepEqual(elements.rows.children.map(row => row.dataset.teamId), ['19-a', '19-b', 'missing']);
